@@ -3,6 +3,7 @@
 
 #include <cstddef>
 #include <cstring>
+#include <vector>
 #include <string>
 #include <sys/time.h>
 #include <time.h>
@@ -33,7 +34,7 @@ public:
 
     ShmQueue(int fd, int can_consume_fd, int can_produce_fd, size_t size, bool init);
 
-    char *dequeue(size_t *length, struct timespec *ts=NULL);
+    bool dequeue(std::vector<char>& data, struct timespec *ts=NULL);
     int enqueue(const char *memory, size_t length, struct timespec *ts=NULL);
     size_t used();
 

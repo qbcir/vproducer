@@ -1,27 +1,25 @@
 #ifndef __NNXCAM_VPROD_FRAME_INFO_HPP_4134__
 #define __NNXCAM_VPROD_FRAME_INFO_HPP_4134__
 
-#include <python3.6m/Python.h>
-#include <numpy/arrayobject.h>
+#include <cstdint>
+#include <vector>
 
 namespace nnxcam {
 
 class FrameInfo
 {
 public:
-    typedef npy_int32 delta_t;
-    typedef npy_uint8 occupancy_t;
+    typedef int32_t delta_t;
+    typedef uint8_t occupancy_t;
 
-    delta_t& dx(size_t i, size_t j);
-    delta_t& dy(size_t i, size_t j);
-    occupancy_t& occupancy(size_t i, size_t j);
+    FrameInfo(size_t width, size_t height);
 
     void interpolate_flow(FrameInfo& prev, FrameInfo& next);
     void fill_missing_vectors();
 private:
-    PyArrayObject* _dx = nullptr;
-    PyArrayObject* _dy = nullptr;
-    PyArrayObject* _occupancy = nullptr;
+    std::vector<std::vector<delta_t>> _dx;
+    std::vector<std::vector<delta_t>> _dy;
+    std::vector<std::vector<occupancy_t>> _occupancy;
 
     size_t _width;
     size_t _height;

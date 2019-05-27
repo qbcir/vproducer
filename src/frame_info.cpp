@@ -2,35 +2,35 @@
 
 namespace nnxcam {
 
-FrameInfo::delta_t& FrameInfo::dx(size_t i, size_t j)
+FrameInfo::FrameInfo(size_t width, size_t height) :
+    _width(width),
+    _height(height)
 {
-    auto ip = i*PyArray_STRIDES(_dx)[0];
-    auto jp = j*PyArray_STRIDES(_dx)[1];
-    return *(delta_t*)(PyArray_DATA(_dx) + ip + jp);
-}
-
-FrameInfo::delta_t& FrameInfo::dy(size_t i, size_t j)
-{
-    auto ip = i*PyArray_STRIDES(_dy)[0];
-    auto jp = j*PyArray_STRIDES(_dy)[1];
-    return *(delta_t*)(PyArray_DATA(_dy) + ip + jp);
-}
-
-FrameInfo::occupancy_t& FrameInfo::occupancy(size_t i, size_t j)
-{
-    auto ip = i*PyArray_STRIDES(_occupancy)[0];
-    auto jp = j*PyArray_STRIDES(_occupancy)[1];
-    return *(occupancy_t*)(PyArray_DATA(_occupancy) + ip + jp);
+    _dx.resize(width);
+    for (auto& v : _dx)
+    {
+        v.resize(height);
+    }
+    _dy.resize(width);
+    for (auto& v : _dy)
+    {
+        v.resize(height);
+    }
+    _occupancy.resize(width);
+    for (auto& v : _occupancy)
+    {
+        v.resize(height);
+    }
 }
 
 void FrameInfo::interpolate_flow(FrameInfo& prev, FrameInfo& next)
 {
-    for(int i = 0; i < _width; i++)
+    for(size_t i = 0; i < _width; i++)
     {
-        for(int j = 0; j < _height; j++)
+        for(size_t j = 0; j < _height; j++)
         {
-            dx(i, j) = (prev.dx(i, j) + next.dx(i, j)) / 2;
-            dy(i, j) = (prev.dy(i, j) + next.dy(i, j)) / 2;
+            _dx[i][j] = (prev._dx[i][j] + next._dx[i][j]) / 2;
+            _dy[i][j] = (prev._dy[i][j] + next._dy[i][j]) / 2;
         }
     }
 }
@@ -43,19 +43,19 @@ void FrameInfo::fill_missing_vectors()
         {
             for(size_t j = 1; j < _height - 1; j++)
             {
-                if(occupancy(i, j) == 0)
+                if(!_occupancy[i][j])
                 {
-                    if(occupancy(i, j - 1) != 0 && occupancy(i, j + 1) != 0)
+                    if(_occupancy[i][j - 1] && _occupancy[i][j + 1])
                     {
-                        dx(i, j) = (dx(i, j -1) + dx(i, j + 1)) / 2;
-                        dy(i, j) = (dy(i, j -1) + dy(i, j + 1)) / 2;
-                        occupancy(i, j) = 2;
+                        _dx[i][j] = (_dx[i][j -1] + _dx[i][j + 1]) / 2;
+                        _dy[i][j] = (_dy[i][j -1] + _dy[i][j + 1]) / 2;
+                        _occupancy[i][j] = 2;
                     }
-                    else if(occupancy(i - 1, j) != 0 && occupancy(i + 1, j) != 0)
+                    else if(_occupancy[i - 1][j] && _occupancy[i + 1][j])
                     {
-                        dx(i, j) = (dx(i - 1, j) + dx(i + 1, j)) / 2;
-                        dy(i, j) = (dy(i - 1, j) + dy(i + 1, j)) / 2;
-                        occupancy(i, j) = 2;
+                        _dx[i][j] = (_dx[i - 1][j] + _dx[i + 1][j]) / 2;
+                        _dy[i][j] = (_dy[i - 1][j] + _dy[i + 1][j]) / 2;
+                        _occupancy[i][j] = 2;
                     }
                 }
             }

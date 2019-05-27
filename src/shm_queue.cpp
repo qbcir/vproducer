@@ -98,7 +98,8 @@ size_t ShmQueue::reserved()
     if (_header->end >= _header->start)
     {
         return _header->length - _header->end + _header->start;
-    } else
+    }
+    else
     {
         return _header->start - _header->end;
     }
@@ -178,7 +179,7 @@ int ShmQueue::pop(char* data, size_t length)
     return 0;
 }
 
-char* ShmQueue::dequeue(size_t *length, struct timespec *ts)
+bool ShmQueue::dequeue(std::vector<char>& data, struct timespec *ts)
 {
     ShmLock lock(&_header->futexp);
     while ((_header->start - _header->end + _header->length) % _header->length == 0)
@@ -189,14 +190,14 @@ char* ShmQueue::dequeue(size_t *length, struct timespec *ts)
         fwait(&_header->futexp);
         if (!ret)
         {
-            return nullptr;
+            return false;
         }
         read(_can_consume_fd, &cnt, sizeof(cnt));
     }
-    pop((char*)(length), sizeof(size_t));
-    //FIXME
-    char *ptr = (char*)malloc(*length);
-    pop(ptr, *length);
+    size_t data_sz;
+    pop((char*)&data_sz, sizeof(size_t));
+    data.resize(data_sz);
+    pop(data.data(), data_sz);
     int64_t cnt = 1;
     write(_can_produce_fd, &cnt, sizeof(cnt));
     return ptr;
