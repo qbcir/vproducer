@@ -14,4 +14,4 @@ file(GLOB SRC_VPRODUCER
 include_directories("/usr/local/lib/python3.6/dist-packages/numpy/core/include/")
 
 add_executable(vproducer ${SRC_VPRODUCER})
-target_link_libraries(vproducer jsoncpp avcodec avformat avutil ${PYTHON_LIBRARIES})
+target_link_libraries(vproducer jsoncpp avcodec avformat avutil ${PYTHON_LIBRARIES} coda)
