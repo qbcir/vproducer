@@ -1,4 +1,5 @@
 #include "shm_queue.hpp"
+#include "utils.hpp"
 //
 #include <chrono>
 #include <stdexcept>
@@ -15,16 +16,10 @@
 #include <errno.h>
 #include <coda/error.hpp>
 
-static int64_t clock_get_milliseconds()
-{
-    auto now = std::chrono::system_clock::now();
-    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch());
-    return ms.count();
-}
+namespace aux {
 
-namespace nnxcam {
-
-ShmQueue::ShmQueue(const std::string& key_fname, size_t queue_size)
+ShmQueue::ShmQueue(const std::string& server, const std::string& key, size_t queue_size) :
+    _mutex(nullptr)
 {
 
 }
@@ -63,26 +58,48 @@ void ShmQueue::connect_shm(const char* key_fname, size_t q_size)
     _data = ptr;
 }
 
+bool ShmQueue::get(uint8_t *dst, size_t data_sz)
+{
+    return get(dst, data_sz, -1);
+}
+
+bool ShmQueue::put(uint8_t* src, size_t data_sz)
+{
+    return put(src, data_sz, -1);
+}
+
+bool ShmQueue::get(uint8_t* dst, size_t data_sz, int timeout)
+{
+    return _get([=](uint8_t* _src) {
+        memcpy(dst, _src, data_sz);
+    }, data_sz, timeout);
+}
+
+bool ShmQueue::put(uint8_t *src, size_t data_sz, int timeout)
+{
+    return _put([=](uint8_t* _dst) {
+        memcpy(_dst, src, data_sz);
+    }, data_sz, timeout);
+}
+
 void ShmQueue::lock_queue()
 {
-    Mutex(&_queue_info->atom).lock();
+    _mutex.lock();
 }
 
 void ShmQueue::unlock_queue()
 {
-    Mutex(&_queue_info->atom).unlock();
+    _mutex.unlock();
 }
 
 void ShmQueue::notify_not_full()
 {
-    uint64_t data = 1;
-    write(_q_not_full_fd, &data, sizeof(uint64_t));
+    eventfd_write(_q_not_full_fd, 1);
 }
 
 void ShmQueue::notify_not_empty()
 {
-    uint64_t data = 1;
-    write(_q_not_empty_fd, &data, sizeof(data));
+    eventfd_write(_q_not_empty_fd, 1);
 }
 
 void ShmQueue::read_event_fd(int fd)
@@ -124,30 +141,6 @@ bool ShmQueue::wait_fd_data_available(int fd, int timeout)
         }
     }
     return false;
-}
-
-ShmQueue::ShmQueue(int fd, int can_consume_fd, int can_produce_fd,
-                   size_t size, bool init) :
-    _fd(fd),
-    _q_not_empty_fd(can_consume_fd),
-    _q_not_full_fd(can_produce_fd)
-{
-    size_t map_size = size + sizeof(ShmHeader);
-    auto ptr = mmap(nullptr, map_size, PROT_READ | PROT_WRITE, MAP_SHARED, _fd, 0);
-    if (ptr == MAP_FAILED)
-    {
-        //errExit("map failed");
-    }
-    _header = (ShmHeader*)(ptr);
-    if (init)
-    {
-        _header->length = size;
-        _header->futexp = 1;
-        _header->start = 0;
-        _header->end = 0;
-    }
-    set_blocking(_q_not_empty_fd, false);
-    set_blocking(_q_not_full_fd, false);
 }
 
 }

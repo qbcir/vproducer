@@ -12,7 +12,7 @@ extern "C"
     #include <libavutil/motion_vector.h>
 }
 
-namespace nnxcam {
+namespace aux {
 
 class Reader
 {

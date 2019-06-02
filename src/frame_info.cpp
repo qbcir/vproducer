@@ -1,6 +1,7 @@
 #include "frame_info.hpp"
+#include "serialize.hpp"
 
-namespace nnxcam {
+namespace aux {
 
 FrameInfo::FrameInfo(size_t width, size_t height) :
     _width(width),
@@ -61,6 +62,50 @@ void FrameInfo::fill_missing_vectors()
             }
         }
     }
+}
+
+size_t FrameInfo::serialize(uint8_t *dst)
+{
+    auto p = dst;
+    p += aux::serialize<uint32_t>(p, _width);
+    p += aux::serialize<uint32_t>(p, _height);
+    for (size_t i = 0; i < _width; i++)
+    {
+        for (size_t j = 0; j < _height; j++)
+        {
+            p += aux::serialize<delta_t>(p, _dx[i][j]);
+        }
+    }
+    for (size_t i = 0; i < _width; i++)
+    {
+        for (size_t j = 0; j < _height; j++)
+        {
+            p += aux::serialize<delta_t>(p, _dy[i][j]);
+        }
+    }
+    for (size_t i = 0; i < _width; i++)
+    {
+        for (size_t j = 0; j < _height; j++)
+        {
+            p += aux::serialize<occupancy_t>(p, _occupancy[i][j]);
+        }
+    }
+    return p - dst;
+}
+
+bool FrameInfo::deserialize(uint8_t *p)
+{
+
+}
+
+size_t FrameInfo::byte_size() const
+{
+    size_t sz = 0;
+    size_t grid_sz = _width * _height;
+    sz += grid_sz * sizeof(delta_t);
+    sz += grid_sz * sizeof(delta_t);
+    sz += grid_sz * sizeof(occupancy_t);
+    return sz;
 }
 
 }

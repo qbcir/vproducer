@@ -4,7 +4,7 @@
 #include <vector>
 #include <thread>
 
-namespace nnxcam {
+namespace aux {
 
 class Producer
 {

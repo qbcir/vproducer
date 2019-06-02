@@ -1,6 +1,6 @@
 #include "reader.hpp"
 
-namespace nnxcam {
+namespace aux {
 
 Reader::Reader(const std::string &video_url) :
     _video_url(video_url)

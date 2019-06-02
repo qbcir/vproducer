@@ -2,7 +2,7 @@
 #include <fstream>
 #include <jsoncpp/json/json.h>
 
-namespace nnxcam {
+namespace aux {
 
 bool Producer::read_config(const std::string& config_path)
 {
