@@ -21,13 +21,16 @@ public:
     bool deserialize(uint8_t *p);
 
     size_t byte_size() const;
-private:
-    std::vector<std::vector<delta_t>> _dx;
-    std::vector<std::vector<delta_t>> _dy;
-    std::vector<std::vector<occupancy_t>> _occupancy;
 
-    uint32_t _width;
-    uint32_t _height;
+    std::vector<std::vector<delta_t>> dx;
+    std::vector<std::vector<delta_t>> dy;
+    std::vector<std::vector<occupancy_t>> occupancy;
+
+    uint32_t width;
+    uint32_t height;
+
+    bool empty;
+    int64_t pts;
 };
 
 }

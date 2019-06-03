@@ -2,8 +2,10 @@
 
 namespace nnxcam {
 
-Reader::Reader(const std::string &video_url) :
-    _video_url(video_url)
+Reader::Reader(const std::string &video_url, std::mutex &queue_lock, std::shared_ptr<ShmQueue> shm_queue) :
+    _video_url(video_url),
+    _queue_lock(queue_lock),
+    _shm_queue(shm_queue)
 {
     _av_frame = av_frame_alloc();
     _av_format_ctx = avformat_alloc_context();
@@ -134,16 +136,95 @@ bool Reader::read_frame()
 
 bool Reader::run()
 {
-    for(size_t frame_idx = 1; read_frame(); frame_idx++)
+    for(_frame_index = 1; read_frame(); _frame_index++)
     {
         if(_pts <= _prev_pts && _prev_pts != -1)
         {
             //fprintf(stderr, "Skipping frame %d (frame with pts %d already processed).\n", int(frameIndex), int(pts));
             continue;
         }
-        //output_vectors_std(frame_idx, pts, pictType, motionVectors);
+        dump_frames();
         _prev_pts = _pts;
     }
+}
+
+void Reader::dump_frames()
+{
+    size_t frame_bytes = avpicture_get_size(AV_PIX_FMT_RGB32, _frame_width, _frame_height);
+    uint8_t frame_buf [frame_bytes];
+    avpicture_layout((AVPicture*)_av_frame, AV_PIX_FMT_RGB32, _frame_width, _frame_height, frame_buf, frame_bytes);
+
+    /*
+    size_t grid_step = 8;
+
+    auto grid_width = _frame_width / grid_step;
+    auto grid_height = _frame_height / grid_step;
+
+    if(!_frame_info_vec.empty() && _pts != _frame_info_vec.back().pts + 1)
+    {
+        for(int64_t dummy_pts = _frame_info_vec.back().pts + 1; dummy_pts < _pts; dummy_pts++)
+        {
+            FrameInfo dummy(grid_width, grid_height);
+            dummy.FrameIndex = -1;
+            dummy.pts = dummy_pts;
+            dummy.Origin = "dummy";
+            dummy.PictType = '?';
+            dummy.GridStep = gridStep;
+            prev.push_back(dummy);
+        }
+    }
+
+    FrameInfo curr_frame_info(grid_width, grid_height);
+
+    cur.FrameIndex = frameIndex;
+    cur.Pts = pts;
+    cur.Origin = "video";
+    cur.PictType = pictType;
+    cur.GridStep = gridStep;
+    cur.Shape = shape;
+
+
+    for(int i = 0; i < _motion_vectors.size(); i++)
+    {
+        auto& mvec = _motion_vectors[i];
+        int mvdx = mvec.dst_x - mvec.src_x;
+        int mvdy = mvec.dst_y - mvec.src_y;
+
+        size_t i_clipped = std::max(size_t(0), std::min(mvec.dst_x / grid_step, curr_frame_info.width - 1));
+        size_t j_clipped = std::max(size_t(0), std::min(mvec.dst_y / grid_step, curr_frame_info.height - 1));
+
+        curr_frame_info.empty = false;
+        curr_frame_info.dx[i_clipped][j_clipped] = mvdx;
+        curr_frame_info.dy[i_clipped][j_clipped] = mvdy;
+        curr_frame_info.occupancy[i_clipped][j_clipped] = true;
+    }
+    if(grid_step == 8)
+    {
+        curr_frame_info.fill_missing_vectors();
+    }
+    if(_frame_index == -1)
+    {
+        for(int i = 0; i < prev.size(); i++)
+            prev[i].PrintIfNotPrinted();
+    }
+    else if(!_motion_vectors.empty())
+    {
+        if(prev.size() == 2 && prev.front().Empty == false)
+        {
+            prev.back().InterpolateFlow(prev.front(), cur);
+            prev.back().PrintIfNotPrinted();
+        }
+        else
+        {
+            for(int i = 0; i < prev.size(); i++)
+                prev[i].PrintIfNotPrinted();
+        }
+        prev.clear();
+        cur.PrintIfNotPrinted();
+    }
+
+    _frame_info_vec.emplace_back(curr_frame_info);
+    */
 }
 
 }

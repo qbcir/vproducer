@@ -38,5 +38,4 @@ void ShmCondVar::notify()
     notify_cond(_value, _previous);
 }
 
-
 }

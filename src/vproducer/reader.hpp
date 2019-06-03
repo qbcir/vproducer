@@ -2,7 +2,9 @@
 #define __NNXCAM_VPROD_READER_HPP_20168__
 
 #include <string>
+#include <mutex>
 #include <vector>
+#include <memory>
 
 extern "C"
 {
@@ -12,12 +14,15 @@ extern "C"
     #include <libavutil/motion_vector.h>
 }
 
+#include "common/shm_queue.hpp"
+#include "frame_info.hpp"
+
 namespace nnxcam {
 
 class Reader
 {
 public:
-    Reader(const std::string& video_url);
+    Reader(const std::string& video_url, std::mutex& queue_lock, std::shared_ptr<ShmQueue> shm_queue);
     ~Reader();
 
     bool init();
@@ -26,6 +31,7 @@ private:
     bool read_frame();
     int process_frame(AVPacket *pkt);
     int read_packets();
+    void dump_frames();
 
     AVFrame* _av_frame = nullptr;
     AVFormatContext* _av_format_ctx = nullptr;
@@ -41,6 +47,14 @@ private:
     int64_t _prev_pts = -1;
     char _pic_type;
     std::vector<AVMotionVector> _motion_vectors;
+
+    std::mutex& _queue_lock;
+    std::shared_ptr<ShmQueue> _shm_queue = nullptr;
+
+    std::vector<FrameInfo> _frame_info_vec;
+
+    size_t _frame_index = 0;
+
 };
 
 }

@@ -38,7 +38,7 @@ void ShmQueue::connect_shm(const char* key_fname, size_t q_size)
     bool created = false;
     if (-1 == (_shm_id = shmget(key, q_size + sizeof(_queue_info), 0666)))
     {
-        if (-1 == (_shm_id = shmget(key, q_size + sizeof(_queue_info), IPC_CREAT | 0666))) // not created? creating...
+        if (-1 == (_shm_id = shmget(key, q_size + sizeof(_queue_info), IPC_CREAT | 0666)))
         {
             throw coda_error("ShmQueue: error creating queue shm: %s", coda_strerror(errno));
         }
