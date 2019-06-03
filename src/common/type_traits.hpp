@@ -4,7 +4,7 @@
 #include <type_traits>
 #include <vector>
 
-namespace aux {
+namespace nnxcam {
 
 template<typename T>
 struct is_vec

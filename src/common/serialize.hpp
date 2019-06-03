@@ -4,7 +4,7 @@
 #include "type_traits.hpp"
 #include <cstdint>
 
-namespace aux {
+namespace nnxcam {
 
 template<typename T>
 size_t serialize(uint8_t* p, const T& val)

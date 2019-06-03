@@ -16,10 +16,10 @@
 #include <errno.h>
 #include <coda/error.hpp>
 
-namespace aux {
+namespace nnxcam {
 
-ShmQueue::ShmQueue(const std::string& server, const std::string& key, size_t queue_size) :
-    _mutex(nullptr)
+ShmQueue::ShmQueue(const std::string& key, size_t queue_size) :
+    _queue_lock(nullptr)
 {
 
 }
@@ -80,67 +80,6 @@ bool ShmQueue::put(uint8_t *src, size_t data_sz, int timeout)
     return _put([=](uint8_t* _dst) {
         memcpy(_dst, src, data_sz);
     }, data_sz, timeout);
-}
-
-void ShmQueue::lock_queue()
-{
-    _mutex.lock();
-}
-
-void ShmQueue::unlock_queue()
-{
-    _mutex.unlock();
-}
-
-void ShmQueue::notify_not_full()
-{
-    eventfd_write(_q_not_full_fd, 1);
-}
-
-void ShmQueue::notify_not_empty()
-{
-    eventfd_write(_q_not_empty_fd, 1);
-}
-
-void ShmQueue::read_event_fd(int fd)
-{
-    uint64_t data;
-    int ret = read(fd, &data, sizeof(data));
-    if (ret < 0)
-    {
-        // error
-    }
-}
-
-bool ShmQueue::wait_fd_data_available(int fd, int timeout)
-{
-    const int MAX_NUM_EVENTS = 32;
-    struct epoll_event events[MAX_NUM_EVENTS];
-
-    int64_t start_time = clock_get_milliseconds();
-    int elapsed = 0;
-    while (true)
-    {
-        int _timeout = timeout == -1 ? -1 : std::max(0, timeout - elapsed);
-        int nfds = epoll_wait(_epoll_fd, events, MAX_NUM_EVENTS, _timeout);
-        for (int i = 0; i < nfds; i++)
-        {
-            if (events[i].events & EPOLLIN && events[i].data.fd == fd)
-            {
-                return true;
-            }
-        }
-        if (timeout == -1)
-        {
-            continue;
-        }
-        elapsed = clock_get_milliseconds() - start_time;
-        if (elapsed <= 0)
-        {
-            break;
-        }
-    }
-    return false;
 }
 
 }

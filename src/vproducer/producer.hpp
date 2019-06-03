@@ -4,13 +4,14 @@
 #include <vector>
 #include <thread>
 
-namespace aux {
+namespace nnxcam {
 
 class Producer
 {
 public:
     bool read_config(const std::string& config_path);
 private:
+    std::vector<std::thread> _threads;
 };
 
 }

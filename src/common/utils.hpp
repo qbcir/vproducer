@@ -3,7 +3,7 @@
 
 #include <cstdint>
 
-namespace aux {
+namespace nnxcam {
 
 int64_t clock_get_milliseconds();
 

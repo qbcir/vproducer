@@ -1,7 +1,7 @@
 #include "utils.hpp"
 #include <chrono>
 
-namespace aux {
+namespace nnxcam {
 
 int64_t clock_get_milliseconds()
 {

@@ -1,13 +1,14 @@
-#ifndef __NNXCAM_VPROD_FUTEX_HPP_14422__
-#define __NNXCAM_VPROD_FUTEX_HPP_14422__
+#ifndef __NNXCAM_COMMON_FUTEX_HPP_14422__
+#define __NNXCAM_COMMON_FUTEX_HPP_14422__
 
 #include <atomic>
 
-namespace aux {
+namespace nnxcam {
 
 class ShmFutex
 {
 public:
+    ShmFutex() {}
     ShmFutex(std::atomic<int>* atom);
     void lock();
     void unlock();
@@ -28,4 +29,4 @@ private:
 
 }
 
-#endif /* __NNXCAM_VPROD_FUTEX_HPP_14422__ */
+#endif /* __NNXCAM_COMMON_FUTEX_HPP_14422__ */

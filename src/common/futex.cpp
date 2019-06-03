@@ -4,39 +4,35 @@
 #include <sys/syscall.h>
 #include <unistd.h>
 
-static inline int cmpxchg(std::atomic<int>* atom, int expected, int desired)
-{
-    int* ep = &expected;
-    std::atomic_compare_exchange_strong(atom, ep, desired);
-    return *ep;
-}
-
 static inline void lock_atom(std::atomic<int>* atom)
 {
-    int c = cmpxchg(atom, 0, 1);
-    if (c != 0)
+    int c = 0;
+    std::atomic_compare_exchange_strong_explicit(atom, &c, 1, std::memory_order_seq_cst, std::memory_order_seq_cst);
+    if (c == 0)
     {
-        do
-        {
-            if (c == 2 || cmpxchg(atom, 1, 2) != 0)
-            {
-                syscall(SYS_futex, (int*)atom, FUTEX_WAIT, 2, 0, 0, 0);
-            }
-        }
-        while ((c = cmpxchg(atom, 0, 2)) != 0);
+        return;
+    }
+    if (c == 1)
+    {
+        c = std::atomic_exchange_explicit(atom, 2, std::memory_order_seq_cst);
+    }
+    while (c != 0)
+    {
+        syscall(SYS_futex, (int*)atom, FUTEX_WAIT, 2, NULL, 0, 0);
+        c = std::atomic_exchange_explicit(atom, 2, std::memory_order_seq_cst);
     }
 }
 
 static inline void unlock_atom(std::atomic<int>* atom)
 {
-    if (atom->fetch_sub(1) != 1)
+    if (std::atomic_fetch_sub_explicit(atom, 1, std::memory_order_seq_cst) != 1)
     {
         atom->store(0);
         syscall(SYS_futex, (int*)atom, FUTEX_WAKE, 1, 0, 0, 0);
     }
 }
 
-namespace aux {
+namespace nnxcam {
 
 ShmFutex::ShmFutex(std::atomic<int>* atom) :
     _atom(atom)

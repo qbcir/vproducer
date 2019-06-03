@@ -3,15 +3,10 @@ project(nnxcam)
 
 set(CMAKE_CXX_STANDARD 14)
 
-find_package(PythonLibs REQUIRED)
-include_directories(${PYTHON_INCLUDE_DIRS})
-#target_link_libraries(<your exe or lib> ${PYTHON_LIBRARIES})
+include_directories("src")
 
 file(GLOB SRC_VPRODUCER
-    "src/*.cpp"
-    "main.cpp")
-
-include_directories("/usr/local/lib/python3.6/dist-packages/numpy/core/include/")
-
+    "src/common/*.cpp"
+    "src/vproducer/*.cpp")
 add_executable(vproducer ${SRC_VPRODUCER})
-target_link_libraries(vproducer jsoncpp avcodec avformat avutil ${PYTHON_LIBRARIES} coda)
+target_link_libraries(vproducer jsoncpp avcodec avformat avutil coda)

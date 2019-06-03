@@ -1,23 +1,27 @@
-#ifndef __NNXCAM_VPROD_SHM_QUEUE_HPP_17758__
-#define __NNXCAM_VPROD_SHM_QUEUE_HPP_17758__
+#ifndef __NNXCAM_COMMON_SHM_QUEUE_HPP_17758__
+#define __NNXCAM_COMMON_SHM_QUEUE_HPP_17758__
 
 #include <atomic>
 #include <cstddef>
 #include <cstring>
 #include <vector>
 #include <string>
+#include <mutex>
 #include <type_traits>
 #include <sys/time.h>
 #include <time.h>
 
 #include "futex.hpp"
+#include "cond_var.hpp"
 #include "serialize.hpp"
 
-namespace aux {
+namespace nnxcam {
 
 struct ShmQueueInfo
 {
     std::atomic<int32_t> atom;
+    CondVarData not_full;
+    CondVarData not_empty;
     uint32_t size;
     uint32_t capacity;
     uint32_t head;
@@ -38,7 +42,7 @@ class ShmQueue
 public:
     typedef uint32_t queue_size_t;
 
-    ShmQueue(const std::string& server, const std::string& key, size_t queue_size);
+    ShmQueue(const std::string& key, size_t queue_size);
     //
     template<typename T>
     bool get(T& obj)
@@ -76,56 +80,26 @@ private:
     template<typename F>
     bool _get(F func, size_t data_sz, int timeout)
     {
-         lock_queue();
-         try
-         {
-             while (_queue_info->size < data_sz)
-             {
-                 unlock_queue();
-                 if (!wait_fd_data_available(_q_not_empty_fd, timeout))
-                 {
-                     return false;
-                 }
-                 lock_queue();
-                 read_event_fd(_q_not_empty_fd);
-             }
-             _deserialize(func, data_sz);
-             notify_not_full();
-             unlock_queue();
-         }
-         catch(...)
-         {
-             unlock_queue();
-             throw;
-         }
-         return true;
+        std::unique_lock<ShmFutex> lock(_queue_lock);
+        while (_queue_info->size < data_sz)
+        {
+            _not_empty_cond.wait(lock);
+        }
+        _deserialize(func, data_sz);
+        _not_full_cond.notify();
+        return true;
     }
 
     template<typename F>
     bool _put(F func, size_t data_sz, int timeout)
     {
-        lock_queue();
-        try
+        std::unique_lock<ShmFutex> lock(_queue_lock);
+        while (_queue_info->size + data_sz >= _queue_info->capacity)
         {
-            while (_queue_info->size + data_sz >= _queue_info->capacity)
-            {
-                unlock_queue();
-                if (!wait_fd_data_available(_q_not_full_fd, timeout))
-                {
-                    return false;
-                }
-                lock_queue();
-                read_event_fd(_q_not_full_fd);
-            }
-            _serialize(func, data_sz);
-            notify_not_empty();
-            unlock_queue();
+            _not_full_cond.wait(lock);
         }
-        catch (...)
-        {
-            unlock_queue();
-            throw;
-        }
+        _serialize(func, data_sz);
+        _not_empty_cond.notify();
         return true;
     }
 
@@ -178,23 +152,15 @@ private:
     }
 
     void connect_shm(const char* key_fname, size_t q_size);
-    void lock_queue();
-    void unlock_queue();
-    void notify_not_full();
-    void notify_not_empty();
-
-    bool wait_fd_data_available(int fd, int timeout);
-    void read_event_fd(int fd);
 
     ShmQueueInfo *_queue_info = nullptr;
-    ShmFutex _mutex;
+    ShmFutex _queue_lock;
+    ShmCondVar _not_empty_cond;
+    ShmCondVar _not_full_cond;
     uint8_t *_data = nullptr;
     int _shm_id;
-    int _epoll_fd;
-    int _q_not_empty_fd;
-    int _q_not_full_fd;
 };
 
 }
 
-#endif /* __NNXCAM_VPROD_SHM_QUEUE_HPP_17758__ */
+#endif /* __NNXCAM_COMMON_SHM_QUEUE_HPP_17758__ */

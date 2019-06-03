@@ -1,9 +1,9 @@
 #ifndef __NNXCAM_VPROD_FRAME_HPP_3141__
 #define __NNXCAM_VPROD_FRAME_HPP_3141__
 
-#include "serialize.hpp"
+#include "common/serialize.hpp"
 
-namespace aux {
+namespace nnxcam {
 
 }
 

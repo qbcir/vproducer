@@ -4,7 +4,7 @@
 #include <cstdint>
 #include <vector>
 
-namespace aux {
+namespace nnxcam {
 
 class FrameInfo
 {
