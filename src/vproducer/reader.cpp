@@ -1,4 +1,11 @@
 #include "reader.hpp"
+#include <coda/logger.h>
+#include <coda/error.hpp>
+
+extern "C"
+{
+#include <libavutil/opt.h>
+}
 
 namespace nnxcam {
 
@@ -20,19 +27,27 @@ Reader::~Reader()
 bool Reader::init()
 {
     int err = 0;
+    AVDictionary *options = nullptr;
+    if((err = av_dict_set(&options, "rtsp_transport", "tcp", 0)) < 0)
+    {
+        throw coda_error("Can't set 'rtsp_transport' option.");
+        return false;
+    }
     if ((err = avformat_open_input(&_av_format_ctx, _video_url.c_str(), NULL, NULL)) != 0)
     {
         //ffmpeg_print_error(err);
-        //throw std::runtime_error("Couldn't open file. Possibly it doesn't exist.");
+        throw coda_error("Couldn't open file. Possibly it doesn't exist.");
         return false;
     }
     if ((err = avformat_find_stream_info(_av_format_ctx, NULL)) < 0)
     {
         //ffmpeg_print_error(err);
-        //throw std::runtime_error("Stream information not found.");
+        throw coda_error("Stream information not found.");
         return false;
     }
-    for(size_t i = 0; i < _av_format_ctx->nb_streams; i++)
+
+    size_t i = 0;
+    for(; i < _av_format_ctx->nb_streams; i++)
     {
         auto enc = _av_format_ctx->streams[i]->codec;
         if( AVMEDIA_TYPE_VIDEO == enc->codec_type && _video_stream_idx < 0)
@@ -55,10 +70,10 @@ bool Reader::init()
             break;
         }
     }
-    return true;
+    return i < _av_format_ctx->nb_streams;
 }
 
-int Reader::process_frame(AVPacket *pkt)
+bool Reader::process_frame(AVPacket *pkt)
 {
     av_frame_unref(_av_frame);
 
@@ -66,22 +81,25 @@ int Reader::process_frame(AVPacket *pkt)
     int ret = avcodec_decode_video2(_av_stream->codec, _av_frame, &got_picture_ptr, pkt);
     if (ret < 0)
     {
-        return ret;
+        return false;
     }
     ret = FFMIN(ret, pkt->size); /* guard against bogus return values */
     pkt->data += ret;
     pkt->size -= ret;
-    return got_picture_ptr;
+    log_error("got_picture_ptr=%d", got_picture_ptr);
+    return got_picture_ptr > 0;
 }
 
 // FIXME
-int Reader::read_packets()
+bool Reader::read_packets()
 {
-    static AVPacket pkt, pktCopy;
+    log_error("read_packets");
+    thread_local AVPacket pkt, pktCopy;
     while(true)
     {
         if(_initialized)
         {
+            log_error("initialized");
             if(process_frame(&pktCopy))
             {
                 return true;
@@ -93,6 +111,7 @@ int Reader::read_packets()
             }
         }
         int ret = av_read_frame(_av_format_ctx, &pkt);
+        log_error("ret=%d", ret);
         if(ret != 0)
         {
             break;
@@ -106,12 +125,13 @@ int Reader::read_packets()
             continue;
         }
     }
+    log_error("process_frame");
     return process_frame(&pkt);
 }
 
 bool Reader::read_frame()
 {
-    if(read_packets() > 0)
+    if(!read_packets())
     {
         return false;
     }

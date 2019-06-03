@@ -16,6 +16,7 @@ int main(int argc, char **argv)
         }
     }
     std::string config_file(config_file_buf);
+    nnxcam::Producer::init();
     nnxcam::Producer vprod;
     vprod.read_config(config_file);
     vprod.run();

@@ -1,8 +1,56 @@
 #include "producer.hpp"
 #include <fstream>
 #include <jsoncpp/json/json.h>
+#include <coda/logger.h>
+#include <coda/error.hpp>
 
 namespace nnxcam {
+
+int vprod_lockmgr_cb(void **mutex, enum AVLockOp op)
+{
+    if (!mutex)
+    {
+        return -1;
+    }
+
+    switch(op)
+    {
+    case AV_LOCK_CREATE:
+    {
+        *mutex = nullptr;
+        auto m = new std::mutex();
+        *mutex = static_cast<void*>(m);
+        break;
+    }
+    case AV_LOCK_OBTAIN:
+    {
+        auto m = static_cast<std::mutex*>(*mutex);
+        m->lock();
+        break;
+    }
+    case AV_LOCK_RELEASE:
+    {
+        auto m = static_cast<std::mutex*>(*mutex);
+        m->unlock();
+        break;
+    }
+    case AV_LOCK_DESTROY:
+    {
+        auto m = static_cast<std::mutex*>(*mutex);
+        delete m;
+        break;
+    }
+    default:;
+    }
+    return 0;
+}
+
+void Producer::init()
+{
+    av_register_all();
+    av_lockmgr_register(&vprod_lockmgr_cb);
+    avformat_network_init();
+}
 
 bool Producer::read_config(const std::string& config_path)
 {
@@ -39,11 +87,19 @@ bool Producer::read_config(const std::string& config_path)
 void Producer::run()
 {
     Reader _main_reader(_cameras[0].url, _queue_lock, _shm_queue);
+    if (!_main_reader.init())
+    {
+        throw coda_error("Can't init video reader");
+    }
 
     for (size_t i = 1; i < _cameras.size(); i++)
     {
         auto& camera_info = _cameras[i];
         auto reader = std::make_shared<Reader>(camera_info.url, _queue_lock, _shm_queue);
+        if (!reader->init())
+        {
+            throw coda_error("Can't init video reader");
+        }
         _readers.emplace_back(reader);
         _threads.emplace_back(std::thread(&Reader::run, reader.get()));
     }

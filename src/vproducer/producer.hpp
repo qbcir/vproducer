@@ -18,6 +18,7 @@ struct CameraConfig
 class Producer
 {
 public:
+    static void init();
     bool read_config(const std::string& config_path);
     void run();
 private:

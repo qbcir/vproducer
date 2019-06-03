@@ -29,8 +29,8 @@ public:
     bool run();
 private:
     bool read_frame();
-    int process_frame(AVPacket *pkt);
-    int read_packets();
+    bool process_frame(AVPacket *pkt);
+    bool read_packets();
     void dump_frames();
 
     AVFrame* _av_frame = nullptr;
