@@ -19,10 +19,16 @@ extern "C"
 
 namespace nnxcam {
 
+struct CameraConfig
+{
+    uint32_t id;
+    std::string url;
+};
+
 class Reader
 {
 public:
-    Reader(const std::string& video_url, std::mutex& queue_lock, std::shared_ptr<ShmQueue> shm_queue);
+    Reader(const CameraConfig& camera_config, std::mutex& queue_lock, ShmQueue* shm_queue);
     ~Reader();
 
     bool init();
@@ -39,7 +45,6 @@ private:
     int _video_stream_idx = -1;
     bool _initialized = false;
 
-    const std::string _video_url;
     size_t _frame_width = 0;
     size_t _frame_height = 0;
 
@@ -49,12 +54,12 @@ private:
     std::vector<AVMotionVector> _motion_vectors;
 
     std::mutex& _queue_lock;
-    std::shared_ptr<ShmQueue> _shm_queue = nullptr;
+    ShmQueue* _shm_queue = nullptr;
 
-    std::vector<FrameInfo> _frame_info_vec;
-
+    size_t _grid_size = 8;
     size_t _frame_index = 0;
 
+    const CameraConfig _camera_config;
 };
 
 }

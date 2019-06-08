@@ -9,4 +9,4 @@ file(GLOB SRC_VPRODUCER
     "src/common/*.cpp"
     "src/vproducer/*.cpp")
 add_executable(vproducer ${SRC_VPRODUCER})
-target_link_libraries(vproducer jsoncpp avcodec avformat avutil coda pthread)
+target_link_libraries(vproducer jsoncpp avcodec avformat swscale avutil coda pthread)

@@ -4,7 +4,7 @@ from distutils.extension import Extension
 from Cython.Build import cythonize
 
 pyext_path = os.path.dirname(os.path.abspath(__file__))
-src_path = os.path.join(pyext_path, '../src/')
+src_path = os.path.join(pyext_path, '../src/common')
 
 pyx_srcs = [
     'frame_queue.pyx'

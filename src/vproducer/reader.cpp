@@ -5,14 +5,15 @@
 extern "C"
 {
 #include <libavutil/opt.h>
+#include <libavutil/imgutils.h>
 }
 
 namespace nnxcam {
 
-Reader::Reader(const std::string &video_url, std::mutex &queue_lock, std::shared_ptr<ShmQueue> shm_queue) :
-    _video_url(video_url),
+Reader::Reader(const CameraConfig& camera_config, std::mutex &queue_lock, ShmQueue *shm_queue) :
     _queue_lock(queue_lock),
-    _shm_queue(shm_queue)
+    _shm_queue(shm_queue),
+    _camera_config(camera_config)
 {
     _av_frame = av_frame_alloc();
     _av_format_ctx = avformat_alloc_context();
@@ -33,7 +34,7 @@ bool Reader::init()
         throw coda_error("Can't set 'rtsp_transport' option.");
         return false;
     }
-    if ((err = avformat_open_input(&_av_format_ctx, _video_url.c_str(), NULL, NULL)) != 0)
+    if ((err = avformat_open_input(&_av_format_ctx, _camera_config.url.c_str(), NULL, NULL)) != 0)
     {
         //ffmpeg_print_error(err);
         throw coda_error("Couldn't open file. Possibly it doesn't exist.");
@@ -93,13 +94,11 @@ bool Reader::process_frame(AVPacket *pkt)
 // FIXME
 bool Reader::read_packets()
 {
-    log_error("read_packets");
     thread_local AVPacket pkt, pktCopy;
     while(true)
     {
         if(_initialized)
         {
-            log_error("initialized");
             if(process_frame(&pktCopy))
             {
                 return true;
@@ -111,7 +110,6 @@ bool Reader::read_packets()
             }
         }
         int ret = av_read_frame(_av_format_ctx, &pkt);
-        log_error("ret=%d", ret);
         if(ret != 0)
         {
             break;
@@ -125,7 +123,6 @@ bool Reader::read_packets()
             continue;
         }
     }
-    log_error("process_frame");
     return process_frame(&pkt);
 }
 
@@ -137,8 +134,8 @@ bool Reader::read_frame()
     }
     _pic_type = av_get_picture_type_char(_av_frame->pict_type);
     // fragile, consult fresh f_select.c and ffprobe.c when updating ffmpeg
-    auto next_pts = (_av_frame->pkt_dts != AV_NOPTS_VALUE ? _av_frame->pkt_dts : _pts + 1);
-    _pts = _av_frame->pkt_pts != AV_NOPTS_VALUE ? _av_frame->pkt_pts : next_pts;
+    auto next_pts = (_av_frame->pkt_dts != AV_NOPTS_VALUE ? _av_frame->pts : _pts + 1);
+    _pts = _av_frame->pts != AV_NOPTS_VALUE ? _av_frame->pts : next_pts;
     // reading motion vectors, see ff_print_debug_info2 in ffmpeg's libavcodec/mpegvideo.c for reference and a fresh doc/examples/extract_mvs.c
     auto motion_vectors_data = av_frame_get_side_data(_av_frame, AV_FRAME_DATA_MOTION_VECTORS);
     if (motion_vectors_data)
@@ -170,81 +167,39 @@ bool Reader::run()
 
 void Reader::dump_frames()
 {
-    size_t frame_bytes = avpicture_get_size(AV_PIX_FMT_RGB32, _frame_width, _frame_height);
-    uint8_t frame_buf [frame_bytes];
-    avpicture_layout((AVPicture*)_av_frame, AV_PIX_FMT_RGB32, _frame_width, _frame_height, frame_buf, frame_bytes);
+    std::lock_guard<std::mutex> lock(_queue_lock);
+    size_t frame_bytes = av_image_get_buffer_size(AV_PIX_FMT_RGB24, _av_frame->width, _av_frame->height, 1);
+    uint32_t frame_width = _av_frame->width;
+    uint32_t frame_height = _av_frame->height;
+    _shm_queue->put(_camera_config.id);
+    _shm_queue->put(frame_width);
+    _shm_queue->put(frame_height);
+    _shm_queue->put(uint32_t(frame_bytes));
+    _shm_queue->put([=](uint8_t* dst) {
+        auto out_frame = av_frame_alloc();
+        uint8_t out_frame_buf[frame_bytes];
+        out_frame->width = _av_frame->width;
+        out_frame->height = _av_frame->height;
+        av_image_fill_arrays(out_frame->data, out_frame->linesize, out_frame_buf, AV_PIX_FMT_BGR24,
+                             _av_frame->width, _av_frame->height, 1);
+        auto scale_context = sws_getContext(_av_frame->width, _av_frame->height, static_cast<AVPixelFormat>(_av_frame->format),
+                                            _av_frame->width, _av_frame->height, AV_PIX_FMT_BGR24,
+                                            SWS_BICUBIC, NULL, NULL, NULL);
+        sws_scale(scale_context, _av_frame->data, _av_frame->linesize,
+                  0, _av_frame->height, out_frame->data, out_frame->linesize);
+        sws_freeContext(scale_context);
+        av_image_copy_to_buffer(dst, frame_bytes, out_frame->data, out_frame->linesize,
+                                AV_PIX_FMT_BGR24, out_frame->width, out_frame->height, 1);
+        av_frame_free(&out_frame);
+    }, frame_bytes);
 
-    /*
-    size_t grid_step = 8;
-
-    auto grid_width = _frame_width / grid_step;
-    auto grid_height = _frame_height / grid_step;
-
-    if(!_frame_info_vec.empty() && _pts != _frame_info_vec.back().pts + 1)
-    {
-        for(int64_t dummy_pts = _frame_info_vec.back().pts + 1; dummy_pts < _pts; dummy_pts++)
-        {
-            FrameInfo dummy(grid_width, grid_height);
-            dummy.FrameIndex = -1;
-            dummy.pts = dummy_pts;
-            dummy.Origin = "dummy";
-            dummy.PictType = '?';
-            dummy.GridStep = gridStep;
-            prev.push_back(dummy);
-        }
-    }
-
-    FrameInfo curr_frame_info(grid_width, grid_height);
-
-    cur.FrameIndex = frameIndex;
-    cur.Pts = pts;
-    cur.Origin = "video";
-    cur.PictType = pictType;
-    cur.GridStep = gridStep;
-    cur.Shape = shape;
-
-
-    for(int i = 0; i < _motion_vectors.size(); i++)
+    FrameInfo curr_frame_info(_grid_size, _av_frame->width, _av_frame->height, _pts);
+    for(size_t i = 0; i < _motion_vectors.size(); i++)
     {
         auto& mvec = _motion_vectors[i];
-        int mvdx = mvec.dst_x - mvec.src_x;
-        int mvdy = mvec.dst_y - mvec.src_y;
-
-        size_t i_clipped = std::max(size_t(0), std::min(mvec.dst_x / grid_step, curr_frame_info.width - 1));
-        size_t j_clipped = std::max(size_t(0), std::min(mvec.dst_y / grid_step, curr_frame_info.height - 1));
-
-        curr_frame_info.empty = false;
-        curr_frame_info.dx[i_clipped][j_clipped] = mvdx;
-        curr_frame_info.dy[i_clipped][j_clipped] = mvdy;
-        curr_frame_info.occupancy[i_clipped][j_clipped] = true;
+        curr_frame_info.add_motion_vector(mvec);
     }
-    if(grid_step == 8)
-    {
-        curr_frame_info.fill_missing_vectors();
-    }
-    if(_frame_index == -1)
-    {
-        for(int i = 0; i < prev.size(); i++)
-            prev[i].PrintIfNotPrinted();
-    }
-    else if(!_motion_vectors.empty())
-    {
-        if(prev.size() == 2 && prev.front().Empty == false)
-        {
-            prev.back().InterpolateFlow(prev.front(), cur);
-            prev.back().PrintIfNotPrinted();
-        }
-        else
-        {
-            for(int i = 0; i < prev.size(); i++)
-                prev[i].PrintIfNotPrinted();
-        }
-        prev.clear();
-        cur.PrintIfNotPrinted();
-    }
-
-    _frame_info_vec.emplace_back(curr_frame_info);
-    */
+    _shm_queue->put(curr_frame_info);
 }
 
 }

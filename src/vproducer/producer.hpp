@@ -10,11 +10,6 @@
 
 namespace nnxcam {
 
-struct CameraConfig
-{
-    std::string url;
-};
-
 class Producer
 {
 public:
@@ -26,7 +21,7 @@ private:
     std::vector<CameraConfig> _cameras;
     std::vector<std::shared_ptr<Reader>> _readers;
     std::vector<std::thread> _threads;
-    std::shared_ptr<ShmQueue> _shm_queue = nullptr;
+    ShmQueue _shm_queue;
 };
 
 }

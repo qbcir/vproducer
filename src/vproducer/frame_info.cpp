@@ -3,10 +3,12 @@
 
 namespace nnxcam {
 
-FrameInfo::FrameInfo(size_t width, size_t height) :
-    width(width),
-    height(height)
+FrameInfo::FrameInfo(size_t grid_step_, size_t width_, size_t height_, int64_t pts_) :
+    grid_step(grid_step_),
+    pts(pts_)
 {
+    width = width_ / grid_step_;
+    height = height_ / grid_step_;
     dx.resize(width);
     for (auto& v : dx)
     {
@@ -64,9 +66,17 @@ void FrameInfo::fill_missing_vectors()
     }
 }
 
-size_t FrameInfo::serialize(uint8_t *dst)
+size_t FrameInfo::serialize(uint8_t *dst) const
 {
     auto p = dst;
+    if (empty)
+    {
+        p += nnxcam::serialize<uint8_t>(p, 0);
+        return p - dst;
+    }
+    p += nnxcam::serialize<uint8_t>(p, 1);
+    p += nnxcam::serialize<int64_t>(p, pts);
+    p += nnxcam::serialize<uint32_t>(p, grid_step);
     p += nnxcam::serialize<uint32_t>(p, width);
     p += nnxcam::serialize<uint32_t>(p, height);
     for (size_t i = 0; i < width; i++)
@@ -93,18 +103,46 @@ size_t FrameInfo::serialize(uint8_t *dst)
     return p - dst;
 }
 
-bool FrameInfo::deserialize(uint8_t *p)
+ssize_t FrameInfo::deserialize(const uint8_t *p)
 {
+    return -1;
+}
 
+void FrameInfo::add_motion_vector(const AVMotionVector& mvec)
+{
+    int mvdx = mvec.dst_x - mvec.src_x;
+    int mvdy = mvec.dst_y - mvec.src_y;
+
+    int i = mvec.dst_x / grid_step;
+    int j = mvec.dst_y / grid_step;
+    size_t i_clipped = std::max(0, std::min(i, (int)width - 1));
+    size_t j_clipped = std::max(0, std::min(j, (int)height - 1));
+
+    empty = false;
+    dx[i_clipped][j_clipped] = mvdx;
+    dy[i_clipped][j_clipped] = mvdy;
+    occupancy[i_clipped][j_clipped] = 1;
 }
 
 size_t FrameInfo::byte_size() const
 {
     size_t sz = 0;
-    size_t grid_sz = width * height;
-    sz += grid_sz * sizeof(delta_t);
-    sz += grid_sz * sizeof(delta_t);
-    sz += grid_sz * sizeof(occupancy_t);
+    if (empty)
+    {
+        sz += sizeof(uint8_t);
+    }
+    else
+    {
+        size_t grid_sz = width * height;
+        sz += sizeof(uint8_t);
+        sz += sizeof(grid_step);
+        sz += sizeof(width);
+        sz += sizeof(height);
+        sz += sizeof(pts);
+        sz += grid_sz * sizeof(delta_t);
+        sz += grid_sz * sizeof(delta_t);
+        sz += grid_sz * sizeof(occupancy_t);
+    }
     return sz;
 }
 
