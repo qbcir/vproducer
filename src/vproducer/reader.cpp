@@ -87,7 +87,6 @@ bool Reader::process_frame(AVPacket *pkt)
     ret = FFMIN(ret, pkt->size); /* guard against bogus return values */
     pkt->data += ret;
     pkt->size -= ret;
-    log_error("got_picture_ptr=%d", got_picture_ptr);
     return got_picture_ptr > 0;
 }
 
